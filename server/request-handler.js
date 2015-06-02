@@ -11,6 +11,43 @@ this file and include it in basic-server.js so that it actually works.
 *Hint* Check out the node module documentation at http://nodejs.org/api/modules.html.
 
 **************************************************************/
+var fs = require('fs'),
+       path = require('path');
+
+
+var router = {
+  "/classes/messages": {},
+  "/classes/room1":{}
+}
+
+var static_files = {'/': '../client/index.html',
+                    '/styles/styles.css': '../client/styles/styles.css'
+                    // '/bower_components/jquery/jquery.min.js': '../client/bower_components/styles.css',
+                    // '/bower_components/underscore/underscore-min.js' : '../client/bower_components/underscore/underscore-min.js',
+                    // '/bower_components/backbone/backbone.js' : '../client/bower_components/backbone/backbone.js',
+                    // '/scripts/regex.js' : '../client/scripts/regex.js',
+                    // '/scripts/app.js' : '../client/scripts/app.js'
+                    };
+
+var file_types = {'/': 'text/html',
+                  '/styles/styles.css': 'text/css'
+                  // '/bower_components/jquery/jquery.min.js': 'application/javascript',
+                  // '/bower_components/underscore/underscore-min.js': 'application/javascript',
+                  // '/bower_components/backbone/backbone.js': 'application/javascript',
+                  // '/scripts/regex.js': 'application/javascript',
+                  // '/scripts/app.js': 'application/javascript'
+                  };
+
+var index_path = '../client/index.html'
+var serverData = {};
+serverData.results = [];
+
+// serverData.results.push({
+//   username: 'spiderman',
+//   text: 'I am spiderman',
+//   roomname: 'spider house',
+//   createdAt: new Date()
+// });
 
 var requestHandler = function(request, response) {
   // Request and Response come from node's http module.
@@ -22,6 +59,42 @@ var requestHandler = function(request, response) {
   // Documentation for both request and response can be found in the HTTP section at
   // http://nodejs.org/documentation/api/
 
+  // && (request.url === '/classes/messages')
+
+
+  if(request.url in static_files && request.method === 'GET'){
+    var headers = defaultCorsHeaders;
+    headers['Content-Type'] = file_types[request.url];
+    response.writeHead(200, headers);
+
+    // fs.readFile(index_path, function(err, data){
+    //   console.log(data);
+    //   response.end(data);
+    // });
+
+    var filePath = path.join(__dirname, static_files[request.url]);
+    console.log(filePath);
+    //var stat = fileSystem.statSync(filePath);
+    var readStream = fs.createReadStream(filePath);
+    // We replaced all the event handlers with a simple call to readStream.pipe()
+    readStream.pipe(response);
+  }
+  else if (request.url in router) {
+    if (request.method === 'GET') {
+      handleGetRequest(request, response);
+    } else if (request.method === 'POST') {
+      handlePostRequest(request, response);
+    } else if(request.method === 'OPTIONS'){
+      handleOptionsRequest(request, response);
+    }
+  } else {
+    response.writeHead(404, {'Content-Type': 'text/html'});
+    response.end('nonexistent file');
+  }
+
+};
+
+var handleGetRequest = function (request, response) {
   // Do some basic logging.
   //
   // Adding more logging to your server can be an easy way to get passive
@@ -39,7 +112,7 @@ var requestHandler = function(request, response) {
   //
   // You will need to change this if you are sending something
   // other than plain text, like JSON or HTML.
-  headers['Content-Type'] = "text/plain";
+  headers['Content-Type'] = "application/json";
 
   // .writeHead() writes to the request line and headers of the response,
   // which includes the status and all headers.
@@ -52,8 +125,45 @@ var requestHandler = function(request, response) {
   //
   // Calling .end "flushes" the response's internal buffer, forcing
   // node to actually send all the data over to the client.
-  response.end("Hello, World!");
+  response.end(JSON.stringify(serverData));
 };
+
+var handlePostRequest = function (request, response) {
+
+
+  console.log("Serving request type " + request.method + " for url " + request.url);
+
+  var dataString = '';
+
+  var headers = defaultCorsHeaders;
+
+  request.on('data', function(chunk) {
+    // append the current chunk of data to the fullBody variable
+    dataString += chunk;
+  });
+
+  request.on('end', function() {
+
+    headers['Content-Type']='text/html';
+    response.writeHead(201, headers);
+    console.log('===========================================>' + dataString);
+
+
+    var dataObj = JSON.parse(dataString);
+
+    serverData.results.push(dataObj);
+
+    response.end('Message posted on server');
+  });
+
+};
+
+var handleOptionsRequest = function(request, response){
+  var headers = defaultCorsHeaders;
+  headers['Content-Type']='text/html';
+  response.writeHead(200, headers);
+  response.end();
+}
 
 // These headers will allow Cross-Origin Resource Sharing (CORS).
 // This code allows this server to talk to websites that
@@ -71,3 +181,4 @@ var defaultCorsHeaders = {
   "access-control-max-age": 10 // Seconds.
 };
 
+module.exports.requestHandler = requestHandler;
